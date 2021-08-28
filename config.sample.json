@@ -1,0 +1,7 @@
+{
+    "token": "TOK3N",
+    "prefix": "$",
+    "footer": "My Awesome Footer",
+    "ticketCategory": "",
+    "owners": ["YOUR ID HERE"]
+}
