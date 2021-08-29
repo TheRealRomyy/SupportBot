@@ -1,5 +1,6 @@
-import { Channel, Guild, Snowflake, TextChannel, User, MessageEmbed, MessageActionRow, MessageButton } from "discord.js";
-import { clientInterface } from "../interfaces";
+import { Channel, Guild, Snowflake, TextChannel, User, MessageEmbed, MessageActionRow, MessageButton, Message, GuildMember, Collection, MessageAttachment } from "discord.js";
+import { clientInterface, ticketOpt } from "../interfaces";
+import { chatExport } from "../helpers/transcript";
 
 export class Ticket {
 
@@ -18,7 +19,7 @@ export class Ticket {
     public isInited: boolean;
     public readonly client: clientInterface;
 
-    constructor(client, opt) {
+    constructor(client : clientInterface, opt : ticketOpt) {
 
         if(!client) throw new Error("Client is a required settings !");
         if(!opt || !opt.channelId || !opt.guildId || !opt.userId) throw new Error("Opt is a required settings");
@@ -39,7 +40,7 @@ export class Ticket {
         this.client = client;
     }
 
-    async init() {
+    async init() : Promise<void> {
 
         const client = this.client;
 
@@ -54,7 +55,7 @@ export class Ticket {
         this.isInited = true;
     }
 
-    async take() {
+    async take() : Promise<void> {
 
         if(!this.isInited) await this.init();
 
@@ -64,7 +65,14 @@ export class Ticket {
         const ticketOwner = this.ticketOwner;
         const ticketClicker = this.user;
 
-        if(!guild.members.cache.get(ticketClicker.id).permissions.has("MANAGE_MESSAGES")) return;
+        if(!this.canTakeATicket(ticketClicker.id)) return;
+
+        const staffObject = client.db.get("STAFF") || {};
+
+        if(!staffObject[ticketClicker.id]) staffObject[ticketClicker.id] = 1;
+        else staffObject[ticketClicker.id]++;
+
+        client.db.set("STAFF", staffObject);
 
         const messageAndChannelId = client.db.get(`EXPLAIN_PROBLEM_${this.channelId}`);
 
@@ -107,7 +115,7 @@ export class Ticket {
         messageFetched1.delete().catch();
     }
 
-    async close() {
+    async close() : Promise<void> {
 
         if(!this.isInited) await this.init();
 
@@ -119,15 +127,15 @@ export class Ticket {
 
         const messageAndChannelId = client.db.get(`EXPLAIN_PROBLEM_${this.channelId}`);
 
-        const channelFetched = await guild.channels.fetch(messageAndChannelId.channel);
-        const messageFetched = await (channelFetched as TextChannel).messages.fetch(messageAndChannelId.message);
+        const channelFetched : Channel = await guild.channels.fetch(messageAndChannelId.channel);
+        const messageFetched : Message = await (channelFetched as TextChannel).messages.fetch(messageAndChannelId.message);
 
-        const embed = new MessageEmbed()
+        const embed : MessageEmbed = new MessageEmbed()
             .setColor("RED")
             .setDescription(`Le ticket a été fermé par <@!${ticketClicker.id}> \n \n\`🗑️ Suppprimer le ticket\` -> Pour supprimer le ticket \n\`🔓 Réouvrir le ticket\` -> Pour réouvrir le ticket`)
             .setFooter(client.config.footer, client.user.displayAvatarURL());
 
-        const group1 = new MessageActionRow().addComponents(
+        const group1 : MessageActionRow = new MessageActionRow().addComponents(
             new MessageButton()
                 .setCustomId(`${Date.now()}CLOSE-TICKET`)
                 .setStyle("DANGER")
@@ -135,7 +143,7 @@ export class Ticket {
                 .setDisabled(true)
         );
 
-        const group2 = new MessageActionRow().addComponents(
+        const group2 : MessageActionRow = new MessageActionRow().addComponents(
             new MessageButton()
                 .setCustomId(`${Date.now()}DELETE-TICKET`)
                 .setStyle("DANGER")
@@ -152,7 +160,7 @@ export class Ticket {
             components: [group1]
         });
 
-        channelFetched.permissionOverwrites.edit(ticketOwner, {
+        (channelFetched as TextChannel).permissionOverwrites.edit(ticketOwner, {
             VIEW_CHANNEL: false,
             SEND_MESSAGES: false
         });
@@ -165,13 +173,13 @@ export class Ticket {
         client.db.set(`DELETE_EMBED_${this.channelId}`, deleteEmbed.id);
     }
 
-    async delete() {
+    async prepareDelete() : Promise<void> {
         if(!this.isInited) await this.init();
 
         const client = this.client;
 
-        const deleteEmbedId = client.db.get(`DELETE_EMBED_${this.channelId}`);
-        const deleteEmbedFetched = await (this.channel as TextChannel).messages.fetch(deleteEmbedId);
+        const deleteEmbedId : Snowflake = client.db.get(`DELETE_EMBED_${this.channelId}`);
+        const deleteEmbedFetched : Message = await (this.channel as TextChannel).messages.fetch(deleteEmbedId);
 
         const group3 = new MessageActionRow().addComponents(
             new MessageButton()
@@ -190,16 +198,10 @@ export class Ticket {
             components: [group3]
         });
 
-        (this.channel as TextChannel).send(`Ce ticket va être supprimé dans **3 secondes** !`);
-        setTimeout(() => this.channel.delete(), 3000);
-
-        if(client.db.get(`EXPLAIN_PROBLEM_${this.channelId}`)) client.db.delete(`EXPLAIN_PROBLEM_${this.channelId}`);
-        if(client.db.get(`PENDING_MESSAGE_${this.channelId}`)) client.db.delete(`PENDING_MESSAGE_${this.channelId}`);
-        if(client.db.get(`DESCRITPION_${this.channelId}`)) client.db.delete(`DESCRITPION_${this.channelId}`);
-        if(client.db.get(`DELETE_EMBED_${this.channelId}`)) client.db.delete(`DELETE_EMBED_${this.channelId}`);
+        this.delete();
     }
 
-    async reopen() {
+    async reopen() : Promise<void>{
         if(!this.isInited) await this.init();
 
         const client = this.client;
@@ -248,6 +250,129 @@ export class Ticket {
             SEND_MESSAGES: true
         });
 
-        (this.channel as TextChannel).send(`Ticket réouvert par <@!${this.userId}`);
+        (this.channel as TextChannel).send(`Ticket réouvert par <@!${this.userId}>`);
+    }
+
+    canTakeATicket(userId : Snowflake) : boolean {
+
+        let userCanTakeTicket = false;
+
+        const guild : Guild = this.guild;
+        const client : clientInterface = this.client;
+        const member : GuildMember = guild.members.cache.get(userId);
+
+        if(member.permissions.has("MANAGE_MESSAGES")) return true;
+
+        member.roles.cache.forEach(role => {
+            if(client.config.allowedRoles.includes(role.id)) return userCanTakeTicket = true;
+        });
+
+        return userCanTakeTicket;
+    }
+
+    async delete() : Promise<void> {
+        if(!this.isInited) await this.init();
+
+        const client = this.client;
+
+        (this.channel as TextChannel).send(`Ce ticket va être supprimé dans **3 secondes** !`);
+        setTimeout(() => this.channel.delete(), 3000);
+
+        if(client.db.get(`EXPLAIN_PROBLEM_${this.channelId}`)) client.db.delete(`EXPLAIN_PROBLEM_${this.channelId}`);
+        if(client.db.get(`PENDING_MESSAGE_${this.channelId}`)) client.db.delete(`PENDING_MESSAGE_${this.channelId}`);
+        if(client.db.get(`DESCRIPTION_${this.channelId}`)) client.db.delete(`DESCRIPTION_${this.channelId}`);
+        if(client.db.get(`DELETE_EMBED_${this.channelId}`)) client.db.delete(`DELETE_EMBED_${this.channelId}`);
+    }
+
+    hasAlreadyATicket(userId : Snowflake) : boolean {
+
+        let userHasAlreadyATicket = false;
+
+        const client = this.client;
+        const guild = client.guilds.cache.get(this.guildId);
+
+        const allTickets = guild.channels.cache.filter(channel => channel.parentId === client.config.ticketCategory);
+
+        allTickets.forEach(channel => {
+            if(channel.name.includes(userId)) userHasAlreadyATicket = true; 
+        });
+
+        return userHasAlreadyATicket;
+    }
+
+    async save() : Promise<void> {
+        if(!this.isInited) await this.init();
+
+        const channel = this.channel;
+        const guild = this.guild;
+        const client = this.client;
+
+        const transcriptEmbed = new MessageEmbed()
+        .setDescription("Transcription en cours...")
+        .setColor("ORANGE")
+        .setFooter(client.config.footer, client.user.displayAvatarURL());
+
+        const msg = await (channel as TextChannel).send({
+            embeds: [transcriptEmbed]
+        });
+
+        const messagesCollection : Collection<string, Message> = await (channel as TextChannel).messages.fetch({
+            limit: 100
+        });
+
+        let messageArray =  Array.from(messagesCollection.values());
+        messageArray = messageArray.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+
+        const users = [];
+
+        messageArray.forEach(async messageArray => {
+            if (users.find(x => x.id === messageArray.member.id)) return;
+            users.push(messageArray.member);
+        });
+
+        let url = null;
+
+        await chatExport(this.channelId, this.ticketOwnerId, this.client).then(async file => {
+
+            transcriptEmbed.setColor("GREEN")
+            .setDescription("Transcription réussie !");
+
+            await msg.edit({
+                embeds: [transcriptEmbed]
+            });
+
+            url = new MessageAttachment(file, `ticket-${this.userId}-${channel.id}.html`);
+        }).catch(async err => {
+
+            client.logger.error(err);
+
+            transcriptEmbed.setColor("RED")
+            .setDescription("Transcription échouée ]:");
+
+            await msg.edit({
+                embeds: [transcriptEmbed]
+            });
+        });
+
+        let usersInTicket = ``;
+        await users.forEach(async member => {
+            usersInTicket += `\n• ${member} (${member.user.tag})`;
+        });
+
+        const finalEmbed = new MessageEmbed()
+        .setColor("BLUE")
+        .setDescription(`Personnes ayant participés au ticket: ${usersInTicket}`)
+        .setFooter(client.config.footer, client.user.displayAvatarURL());
+
+        const transcriptChannel = guild.channels.cache.get(client.config.transcriptChannel);
+        if (!transcriptChannel) return;
+
+        if(url) await (transcriptChannel as TextChannel).send({
+            files: url,
+            embeds: [finalEmbed]
+        });
+        else await (transcriptChannel as TextChannel).send({
+            embeds: [finalEmbed]
+        });
     }
 }

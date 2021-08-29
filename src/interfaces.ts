@@ -1,4 +1,4 @@
-import { Message } from "discord.js";
+import { Message, Snowflake } from "discord.js";
 import { Client } from "./classes/Command";
 import { Client as DiscordClient, Collection } from "discord.js";
 import { Logger } from "./helpers/logger";
@@ -9,7 +9,10 @@ interface configObject {
     prefix: string,
     footer: string,
     ticketCategory: string,
-    owners: string[]
+    owners: string[],
+    allowedRoles: string[],
+    transcriptChannel: string,
+    autoTranscript: boolean
 }
 
 interface cmdFile {
@@ -51,4 +54,10 @@ interface clientInterface extends DiscordClient {
 	commands: Collection<string, cmdFile>,
 }
 
-export { configObject, cmdFile, commandInterface, settingsInterface, helpInterface, clientInterface };
+interface ticketOpt {
+    channelId: Snowflake,
+    guildId: Snowflake,
+    userId: Snowflake
+}
+
+export { configObject, cmdFile, commandInterface, settingsInterface, helpInterface, clientInterface, ticketOpt };

@@ -2,6 +2,9 @@
     "token": "TOK3N",
     "prefix": "$",
     "footer": "My Awesome Footer",
-    "ticketCategory": "",
-    "owners": ["YOUR ID HERE"]
+    "ticketCategory": "THE TICKETS CATEGORY",
+    "owners": ["YOUR ID HERE"],
+    "allowedRoles": ["ROLE THAT CAN TAKE TICKETS"],
+    "transcriptChannel": "THE TRANSCRIPT CHANNEL",
+    "autoTranscript": true
 }

@@ -2,11 +2,11 @@ import { Message } from "discord.js";
 import { Command, Client } from "../classes/Command";
 import { Ticket } from "../classes/Ticket";
 
-class ForceDelete extends Command {
+class Save extends Command {
 
     constructor(client : Client) {
         super(client, {
-            name: "force-delete",
+            name: "save",
             cooldown: 0,
             aliases: ["fe"],
             enabled: true,
@@ -29,8 +29,8 @@ class ForceDelete extends Command {
             userId: message.author.id
         });
 
-        ticket.delete();
+        ticket.save();
     }
 }
 
-module.exports = ForceDelete;
+module.exports = Save;
