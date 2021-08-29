@@ -198,7 +198,7 @@ export class Ticket {
             components: [group3]
         });
 
-        this.delete();
+        this.delete(false);
     }
 
     async reopen() : Promise<void>{
@@ -270,8 +270,10 @@ export class Ticket {
         return userCanTakeTicket;
     }
 
-    async delete() : Promise<void> {
+    async delete(force : boolean) : Promise<void> {
         if(!this.isInited) await this.init();
+
+        if(!force) await this.save();
 
         const client = this.client;
 
@@ -361,14 +363,14 @@ export class Ticket {
 
         const finalEmbed = new MessageEmbed()
         .setColor("BLUE")
-        .setDescription(`Personnes ayant participés au ticket: ${usersInTicket}`)
+        .setDescription(`__Ticket de:__ <@!${this.ticketOwnerId}> \n \nPersonnes ayant participés au ticket: ${usersInTicket}`)
         .setFooter(client.config.footer, client.user.displayAvatarURL());
 
         const transcriptChannel = guild.channels.cache.get(client.config.transcriptChannel);
         if (!transcriptChannel) return;
 
         if(url) await (transcriptChannel as TextChannel).send({
-            files: url,
+            files: [url],
             embeds: [finalEmbed]
         });
         else await (transcriptChannel as TextChannel).send({

@@ -13,7 +13,7 @@ export async function chatExport(channelId : Snowflake, userId : Snowflake, clie
 
         exec(`cd ${back3folders}/Chat && ${secondPartOfCommand}`, async (error, data) => {
 
-            if (data.indexOf('Done.') !== -1) resolve(__dirname + `/docs/${userId}-${channelId}.html`);
+            if (data.indexOf('Done.') !== -1) resolve(`${back3folders}/transcription/${userId}-${channelId}.html`);
             else reject(error);
 
         });

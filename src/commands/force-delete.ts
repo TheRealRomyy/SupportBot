@@ -29,7 +29,7 @@ class ForceDelete extends Command {
             userId: message.author.id
         });
 
-        ticket.delete();
+        ticket.delete(true);
     }
 }
 
